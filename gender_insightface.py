@@ -5,23 +5,20 @@ import os
 import random
 import time
 
-# Definindo resolução fixa de 14" (Full HD)
-# Resolução para tablet em MODO RETRATO (vertical)
+# Resolução vertical para tablet (modo retrato)
 largura_tela = 1080
 altura_tela = 1920
 
-
-
-# Carregando o modelo de análise facial
+# Carrega o modelo de análise facial
 app = FaceAnalysis(providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-# Definindo os caminhos das imagens que quero usar
+# Caminhos para imagens
 caminho_generico = os.path.join("data", "generic")
 caminho_homem = os.path.join("data", "man")
 caminho_mulher = os.path.join("data", "woman")
 
-# Pega uma imagem aleatória de uma pasta e redimensiona para preencher a tela
+# Função para escolher e redimensionar imagem
 def escolher_imagem(pasta):
     imagens = [img for img in os.listdir(pasta) if img.endswith((".png", ".jpg"))]
     if imagens:
@@ -31,8 +28,8 @@ def escolher_imagem(pasta):
             return cv2.resize(img, (largura_tela, altura_tela))
     return None
 
-# Faz uma transição entre duas imagens com um efeito suave
-def transicao_suave(img1, img2, titulo="Vitro IA", steps=15, delay=30):
+# Transição suave entre imagens
+def transicao_suave(img1, img2, titulo="Vitrine 1", steps=15, delay=30):
     if img1 is None:
         img1 = img2
     for i in range(steps + 1):
@@ -41,20 +38,26 @@ def transicao_suave(img1, img2, titulo="Vitro IA", steps=15, delay=30):
         cv2.imshow(titulo, blended)
         cv2.waitKey(delay)
 
-# Ligando a webcam
+# Inicializa webcam
 cap = cv2.VideoCapture(0)
 
-# Criando a janela e ajustando para resolução de 14" (Full HD)
-cv2.namedWindow("Vitro IA", cv2.WINDOW_NORMAL)
-cv2.resizeWindow("Vitro IA", largura_tela, altura_tela)
+# Cria janelas
+cv2.namedWindow("Vitrine 1", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Vitrine 1", largura_tela, altura_tela)
 
-# Começa mostrando uma propaganda genérica até alguém aparecer
+cv2.namedWindow("Detecção", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Detecção", 640, 480)
+
+cv2.namedWindow("Vitrine 2", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Vitrine 2", largura_tela, altura_tela)
+
+# Inicializa propaganda
 prop_atual = escolher_imagem(caminho_generico)
 
-# Controle de tempo pra saber quando trocar as imagens
+# Controle de tempo
 tempo_final_personalizada = 0
-tempo_exibicao_personalizada = 3  # quanto tempo fica a imagem personalizada
-tempo_troca_generica = 2  # tempo entre trocas das genéricas
+tempo_exibicao_personalizada = 3
+tempo_troca_generica = 2
 ultimo_tempo_troca_generica = time.time()
 
 while True:
@@ -65,40 +68,43 @@ while True:
 
     agora = time.time()
     nova_propaganda = None
+    frame_mostrar = frame.copy()
 
-    # Só troca se o tempo da imagem personalizada tiver acabado
+    # Se passou o tempo da propaganda personalizada
     if agora > tempo_final_personalizada:
         faces = app.get(frame)
 
         if faces:
-            # Pega a primeira face detectada
             face = faces[0]
             gender = face.gender
-            age = int(face.age)
 
-            # Decide qual imagem mostrar com base no gênero
+            # Escolhe imagem personalizada
             pasta_escolhida = caminho_homem if gender == 1 else caminho_mulher
             nova_propaganda = escolher_imagem(pasta_escolhida)
-
-            # Marca o tempo até quando essa imagem vai ficar
             tempo_final_personalizada = agora + tempo_exibicao_personalizada
         else:
-            # Se não tiver ninguém, vai trocando as genéricas de tempos em tempos
+            # Troca genérica
             if agora - ultimo_tempo_troca_generica >= tempo_troca_generica:
                 nova_propaganda = escolher_imagem(caminho_generico)
                 ultimo_tempo_troca_generica = agora
 
-    # Se a imagem for diferente da atual, faz a transição
+    # Se a propaganda mudou, faz transição
     if nova_propaganda is not None and nova_propaganda is not prop_atual:
-        transicao_suave(prop_atual, nova_propaganda)
+        transicao_suave(prop_atual, nova_propaganda, titulo="Vitrine 1")
         prop_atual = nova_propaganda
     else:
-        # Se nada mudou, só continua exibindo
-        cv2.imshow("Vitro IA", prop_atual)
+        cv2.imshow("Vitrine 1", prop_atual)
 
-    # Encerra se apertar a tecla 'q'
+    # Mostra a detecção da câmera (sem desenhar ou mostrar dados)
+    cv2.imshow("Detecção", frame_mostrar)
+
+    # Mostra a vitrine duplicada
+    cv2.imshow("Vitrine 2", prop_atual)
+
+    # Encerra com 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+# Libera recursos
 cap.release()
 cv2.destroyAllWindows()
