@@ -1,66 +1,92 @@
 import cv2
 import insightface
 from insightface.app import FaceAnalysis
+import os
+import random
+import time
 
-# Inicializa o modelo InsightFace
+# Carregando o modelo de análise facial
 app = FaceAnalysis(providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-# Carrega as imagens de propaganda
-prop_masculina = cv2.imread('data/man/3.jpg')
-prop_feminina = cv2.imread('data/woman/3.jpg')  # substitua se tiver outro caminho
+# Definindo os caminhos das imagens que quero usar
+caminho_generico = os.path.join("data", "generic")
+caminho_homem = os.path.join("data", "man")
+caminho_mulher = os.path.join("data", "woman")
 
-# Verifica se as imagens foram carregadas corretamente
-if prop_masculina is None:
-    raise FileNotFoundError("Imagem de propaganda masculina não encontrada em 'data/man/3.jpg'")
-if prop_feminina is None:
-    raise FileNotFoundError("Imagem de propaganda feminina não encontrada em 'data/woman/3.jpg'")
+# Pega uma imagem aleatória de uma pasta e redimensiona pro padrão do "celular"
+def escolher_imagem(pasta):
+    imagens = [img for img in os.listdir(pasta) if img.endswith((".png", ".jpg"))]
+    if imagens:
+        caminho = os.path.join(pasta, random.choice(imagens))
+        img = cv2.imread(caminho)
+        if img is not None:
+            return cv2.resize(img, (480, 800))
+    return None
 
-# Redimensiona as propagandas para exibição no canto
-prop_masculina = cv2.resize(prop_masculina, (150, 150))
-prop_feminina = cv2.resize(prop_feminina, (150, 150))
+# Faz uma transição entre duas imagens com um efeito suave
+def transicao_suave(img1, img2, titulo="Vitro IA", steps=15, delay=30):
+    if img1 is None:
+        img1 = img2
+    for i in range(steps + 1):
+        alpha = i / steps
+        blended = cv2.addWeighted(img1, 1 - alpha, img2, alpha, 0)
+        cv2.imshow(titulo, blended)
+        cv2.waitKey(delay)
 
-# Inicia a webcam
+# Ligando a webcam
 cap = cv2.VideoCapture(0)
-print("Pressione 'q' para sair...")
+cv2.namedWindow("Vitro IA", cv2.WINDOW_NORMAL)
 
-frame_count = 0
-process_every_n_frames = 5
-detected_faces = []
+# Começa mostrando uma propaganda genérica até alguém aparecer
+prop_atual = escolher_imagem(caminho_generico)
+
+# Controle de tempo pra saber quando trocar as imagens
+tempo_final_personalizada = 0
+tempo_exibicao_personalizada = 7  # quanto tempo fica a imagem personalizada
+tempo_troca_generica = 5  # tempo entre trocas das genéricas
+ultimo_tempo_troca_generica = time.time()
 
 while True:
     ret, frame = cap.read()
     if not ret:
+        print("Erro ao capturar da webcam.")
         break
 
-    frame_count += 1
+    agora = time.time()
+    nova_propaganda = None
 
-    if frame_count % process_every_n_frames == 0:
-        detected_faces = app.get(frame)
+    # Só troca se o tempo da imagem personalizada tiver acabado
+    if agora > tempo_final_personalizada:
+        faces = app.get(frame)
 
-    propaganda_img = None
+        if faces:
+            # Pega a primeira face detectada
+            face = faces[0]
+            gender = face.gender
+            age = int(face.age)
 
-    for face in detected_faces:
-        bbox = face.bbox.astype(int)
-        gender = face.gender
-        age = face.age
+            # Decide qual imagem mostrar com base no gênero
+            pasta_escolhida = caminho_homem if gender == 1 else caminho_mulher
+            nova_propaganda = escolher_imagem(pasta_escolhida)
 
-        # Escolhe a propaganda com base no gênero
-        propaganda_img = prop_masculina if gender == 1 else prop_feminina
+            # Marca o tempo até quando essa imagem vai ficar
+            tempo_final_personalizada = agora + tempo_exibicao_personalizada
+        else:
+            # Se não tiver ninguém, vai trocando as genéricas de tempos em tempos
+            if agora - ultimo_tempo_troca_generica >= tempo_troca_generica:
+                nova_propaganda = escolher_imagem(caminho_generico)
+                ultimo_tempo_troca_generica = agora
 
-        # Mostra a caixa e o texto
-        cv2.rectangle(frame, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
-        text = f"Genero: {'M' if gender == 1 else 'F'}, Idade: {int(age)}"
-        cv2.putText(frame, text, (bbox[0], bbox[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    # Se a imagem for diferente da atual, faz a transição
+    if nova_propaganda is not None and nova_propaganda is not prop_atual:
+        transicao_suave(prop_atual, nova_propaganda)
+        prop_atual = nova_propaganda
+    else:
+        # Se nada mudou, só continua exibindo
+        cv2.imshow("Vitro Ai", prop_atual)
 
-    # Exibe propaganda no canto inferior direito
-    if propaganda_img is not None:
-        h, w, _ = propaganda_img.shape
-        frame[-h:, -w:] = propaganda_img
-
-    cv2.imshow('InsightFace com Propaganda por Genero', frame)
-
+    # Encerra se apertar a tecla 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
