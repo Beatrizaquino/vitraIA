@@ -5,6 +5,13 @@ import os
 import random
 import time
 
+# Definindo resolução fixa de 14" (Full HD)
+# Resolução para tablet em MODO RETRATO (vertical)
+largura_tela = 1080
+altura_tela = 1920
+
+
+
 # Carregando o modelo de análise facial
 app = FaceAnalysis(providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(640, 640))
@@ -14,14 +21,14 @@ caminho_generico = os.path.join("data", "generic")
 caminho_homem = os.path.join("data", "man")
 caminho_mulher = os.path.join("data", "woman")
 
-# Pega uma imagem aleatória de uma pasta e redimensiona pro padrão do "celular"
+# Pega uma imagem aleatória de uma pasta e redimensiona para preencher a tela
 def escolher_imagem(pasta):
     imagens = [img for img in os.listdir(pasta) if img.endswith((".png", ".jpg"))]
     if imagens:
         caminho = os.path.join(pasta, random.choice(imagens))
         img = cv2.imread(caminho)
         if img is not None:
-            return cv2.resize(img, (480, 800))
+            return cv2.resize(img, (largura_tela, altura_tela))
     return None
 
 # Faz uma transição entre duas imagens com um efeito suave
@@ -36,15 +43,18 @@ def transicao_suave(img1, img2, titulo="Vitro IA", steps=15, delay=30):
 
 # Ligando a webcam
 cap = cv2.VideoCapture(0)
+
+# Criando a janela e ajustando para resolução de 14" (Full HD)
 cv2.namedWindow("Vitro IA", cv2.WINDOW_NORMAL)
+cv2.resizeWindow("Vitro IA", largura_tela, altura_tela)
 
 # Começa mostrando uma propaganda genérica até alguém aparecer
 prop_atual = escolher_imagem(caminho_generico)
 
 # Controle de tempo pra saber quando trocar as imagens
 tempo_final_personalizada = 0
-tempo_exibicao_personalizada = 7  # quanto tempo fica a imagem personalizada
-tempo_troca_generica = 5  # tempo entre trocas das genéricas
+tempo_exibicao_personalizada = 3  # quanto tempo fica a imagem personalizada
+tempo_troca_generica = 2  # tempo entre trocas das genéricas
 ultimo_tempo_troca_generica = time.time()
 
 while True:
@@ -84,7 +94,7 @@ while True:
         prop_atual = nova_propaganda
     else:
         # Se nada mudou, só continua exibindo
-        cv2.imshow("Vitro Ai", prop_atual)
+        cv2.imshow("Vitro IA", prop_atual)
 
     # Encerra se apertar a tecla 'q'
     if cv2.waitKey(1) & 0xFF == ord('q'):
